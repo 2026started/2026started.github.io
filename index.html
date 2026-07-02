@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f1a14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>홀덤 일지</title>
+<style>
+  :root {
+    --bg: #0f1a14;
+    --card: #18261e;
+    --card2: #1f3127;
+    --border: #2c4435;
+    --text: #e8f0ea;
+    --muted: #93a89b;
+    --green: #4ade80;
+    --red: #f87171;
+    --gold: #fbbf24;
+    --orange: #fb923c;
+    --accent: #34d399;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+    min-height: 100vh;
+    padding-bottom: 80px;
+  }
+  header {
+    padding: max(16px, env(safe-area-inset-top)) 20px 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  header h1 { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+  header .suit { color: var(--accent); font-size: 22px; }
+  .container { padding: 0 16px; max-width: 560px; margin: 0 auto; }
+
+  /* 하단 탭바 */
+  nav {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+    display: flex;
+    background: rgba(15,26,20,0.96);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav button {
+    flex: 1; background: none; border: none; color: var(--muted);
+    padding: 10px 0 12px; font-size: 11px; font-weight: 600;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    cursor: pointer; font-family: inherit;
+  }
+  nav button .ico { font-size: 20px; line-height: 1; }
+  nav button.active { color: var(--accent); }
+
+  .tab { display: none; }
+  .tab.active { display: block; animation: fadein .18s ease; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  /* 통계 */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .stat {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 11px 6px; text-align: center;
+  }
+  .stat .label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .stat .value { font-size: 16px; font-weight: 800; }
+
+  /* 누적 수익 그래프 */
+  .chart-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 12px 14px 8px; margin-bottom: 16px;
+  }
+  .chart-card .chart-title { font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 4px; }
+  .chart-card svg { width: 100%; height: auto; display: block; }
+
+  /* 일지 카드 */
+  .entry {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 10px; cursor: pointer;
+  }
+  .entry-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .entry-date { font-size: 13px; color: var(--muted); }
+  .entry-game { font-size: 15px; font-weight: 700; margin-top: 2px; }
+  .entry-profit { font-size: 17px; font-weight: 800; white-space: nowrap; }
+  .profit-pos { color: var(--green); }
+  .profit-neg { color: var(--red); }
+  .profit-zero { color: var(--muted); }
+  .entry-body { display: none; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .entry.open .entry-body { display: block; }
+  .entry-body h4 { font-size: 12px; color: var(--accent); margin: 10px 0 4px; }
+  .entry-body p { font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+  .entry-meta { font-size: 13px; color: var(--muted); }
+  .entry-actions { display: flex; gap: 8px; margin-top: 12px; }
+  .entry-actions button {
+    flex: 1; padding: 9px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card2); color: var(--text); font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+  }
+  .entry-actions button.del { color: var(--red); }
+  .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 20px;
+    background: var(--card2); border: 1px solid var(--border); color: var(--muted);
+    white-space: nowrap;
+  }
+  .badge.bad { color: var(--red); border-color: var(--red); }
+
+  .empty { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 14px; line-height: 1.7; }
+  .empty .big { font-size: 40px; margin-bottom: 8px; }
+
+  /* 폼 */
+  .form-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px 16px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+  .field input, .field textarea, .field select {
+    width: 100%; padding: 12px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+    font-size: 15px; font-family: inherit;
+  }
+  .field textarea { min-height: 84px; resize: vertical; line-height: 1.5; }
+  .field input:focus, .field textarea:focus, .field select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .profit-preview { text-align: right; font-size: 14px; font-weight: 700; margin: -6px 0 14px; }
+  .btn-primary {
+    width: 100%; padding: 15px; border-radius: 12px; border: none;
+    background: var(--accent); color: #06281c; font-size: 16px; font-weight: 800;
+    cursor: pointer; font-family: inherit;
+  }
+  .btn-cancel {
+    width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--border);
+    background: none; color: var(--muted); font-size: 14px; font-weight: 600;
+    cursor: pointer; margin-top: 8px; font-family: inherit;
+  }
+
+  /* 분석 탭 */
+  .ana-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 14px 16px; margin-bottom: 12px;
+  }
+  .ana-card h3 { font-size: 14px; font-weight: 800; margin-bottom: 10px; }
+  .ana-card table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ana-card th, .ana-card td { padding: 8px 4px; border-bottom: 1px solid var(--border); text-align: right; }
+  .ana-card th:first-child, .ana-card td:first-child { text-align: left; }
+  .ana-card th { color: var(--muted); font-size: 11px; font-weight: 700; }
+  .ana-card tr:last-child td { border-bottom: none; }
+  .ana-note { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+
+  /* ══ 레인지 차트 ══ */
+  .range-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 14px; margin-bottom: 10px;
+  }
+  .range-title { font-size: 15px; font-weight: 800; margin-bottom: 10px; }
+  .pos-btns { display: flex; gap: 6px; margin-bottom: 10px; }
+  .pos-btns button {
+    flex: 1; padding: 9px 0; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--muted); font-size: 12px; font-weight: 800;
+    cursor: pointer; font-family: inherit;
+  }
+  .pos-btns button.sel { background: var(--accent); color: #06281c; border-color: var(--accent); }
+  .range-grid { display: grid; grid-template-columns: repeat(13, 1fr); gap: 2px; }
+  .rc {
+    aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    font-size: 7.5px; font-weight: 800; border-radius: 3px;
+    background: #131f18; color: #4a5f52; letter-spacing: -0.3px;
+  }
+  @media (min-width: 420px) { .rc { font-size: 9px; } }
+  .rc.t0 { background: var(--red); color: #290808; }
+  .rc.t1 { background: var(--orange); color: #2b1403; }
+  .rc.t2 { background: var(--gold); color: #2b2003; }
+  .rc.t3 { background: var(--green); color: #05230f; }
+  .rc.on { background: var(--accent); color: #05230f; }
+  .rc.dim { background: #131f18; color: #3a4c40; }
+  .range-caption { font-size: 12.5px; color: var(--muted); margin-top: 10px; line-height: 1.6; }
+  .range-caption b { color: var(--text); }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+  .legend span { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--muted); }
+  .legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  /* 가이드 */
+  .acc { background: var(--card); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 10px; overflow: hidden; }
+  .acc-head {
+    padding: 14px 16px; font-size: 15px; font-weight: 700; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .acc-head .arrow { color: var(--muted); transition: transform .2s; }
+  .acc.open .acc-head .arrow { transform: rotate(90deg); }
+  .acc-body { display: none; padding: 0 16px 16px; font-size: 14px; line-height: 1.7; }
+  .acc.open .acc-body { display: block; }
+  .acc-body ul { padding-left: 18px; }
+  .acc-body li { margin-bottom: 6px; }
+  .hl { color: var(--accent); font-weight: 700; }
+  .warn { color: var(--red); font-weight: 700; }
+  .tip {
+    background: var(--card2); border-left: 3px solid var(--accent);
+    padding: 10px 12px; border-radius: 0 10px 10px 0; margin: 10px 0; font-size: 13px;
+  }
+  .table-svg { width: 100%; height: auto; display: block; margin: 8px 0; }
+
+  /* 백업 */
+  .backup-row { display: flex; gap: 8px; margin-top: 16px; }
+  .backup-row button {
+    flex: 1; padding: 11px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); color: var(--muted); font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+  }
+  .toast {
+    position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+    background: var(--accent); color: #06281c; padding: 10px 20px; border-radius: 30px;
+    font-size: 14px; font-weight: 700; z-index: 100; opacity: 0; pointer-events: none;
+    transition: opacity .25s; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="suit">♠</span>
+  <h1>홀덤 일지</h1>
+</header>
+
+<div class="container">
+
+  <!-- ══════════ 일지 탭 ══════════ -->
+  <section id="tab-journal" class="tab active">
+    <div class="stats">
+      <div class="stat"><div class="label">세션</div><div class="value" id="stat-sessions">0</div></div>
+      <div class="stat"><div class="label">총 수익</div><div class="value" id="stat-profit">0</div></div>
+      <div class="stat"><div class="label">수익 세션</div><div class="value" id="stat-winrate">-</div></div>
+      <div class="stat"><div class="label">평균 / 세션</div><div class="value" id="stat-avg">-</div></div>
+      <div class="stat"><div class="label">시간당</div><div class="value" id="stat-hourly">-</div></div>
+      <div class="stat"><div class="label">총 시간</div><div class="value" id="stat-hours">-</div></div>
+    </div>
+    <div class="chart-card" id="chart-card" style="display:none">
+      <div class="chart-title">누적 수익</div>
+      <div id="chart"></div>
+    </div>
+    <div id="entry-list"></div>
+    <div class="backup-row">
+      <button onclick="exportData()">📤 백업 (JSON 저장)</button>
+      <button onclick="document.getElementById('import-file').click()">📥 불러오기</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+    </div>
+  </section>
+
+  <!-- ══════════ 작성 탭 ══════════ -->
+  <section id="tab-write" class="tab">
+    <div class="form-card">
+      <input type="hidden" id="f-id">
+      <div class="row2">
+        <div class="field"><label>날짜</label><input type="date" id="f-date"></div>
+        <div class="field"><label>플레이 시간 (시간)</label><input type="number" id="f-hours" placeholder="예: 3.5" step="0.5" min="0" inputmode="decimal"></div>
+      </div>
+      <div class="field"><label>게임 / 장소</label><input type="text" id="f-game" placeholder="예: 온라인 6인 캐시 1/2"></div>
+      <div class="row2">
+        <div class="field"><label>바이인</label><input type="number" id="f-buyin" placeholder="0" inputmode="numeric"></div>
+        <div class="field"><label>최종 캐시아웃</label><input type="number" id="f-cashout" placeholder="0" inputmode="numeric"></div>
+      </div>
+      <div class="profit-preview" id="profit-preview"></div>
+      <div class="field"><label>오늘의 목표 (시작 전 작성)</label><input type="text" id="f-goal" placeholder="예: UTG에서 타이트하게"></div>
+      <div class="field"><label>기억에 남는 핸드 / 메모</label><textarea id="f-hands" placeholder="포지션 / 홀카드 / 액션 / 결과 / 다시 한다면?"></textarea></div>
+      <div class="field"><label>오늘의 교훈</label><textarea id="f-lesson" placeholder="한 줄이라도 남기기"></textarea></div>
+      <div class="field"><label>틸트 체크</label>
+        <select id="f-tilt">
+          <option value="없음">틸트 없음 😌</option>
+          <option value="약간">약간 흔들림 😐</option>
+          <option value="심함">틸트 옴 🔥</option>
+        </select>
+      </div>
+      <button class="btn-primary" onclick="saveEntry()">저장하기</button>
+      <button class="btn-cancel" id="btn-cancel" style="display:none" onclick="resetForm(); switchTab('journal')">수정 취소</button>
+    </div>
+  </section>
+
+  <!-- ══════════ 레인지 탭 ══════════ -->
+  <section id="tab-range" class="tab">
+    <div class="range-card">
+      <div class="range-title">🃏 프리플랍 오픈 레인지</div>
+      <div class="pos-btns" id="pos-btns">
+        <button class="sel" onclick="setRangeMode('all', this)">전체</button>
+        <button onclick="setRangeMode(0, this)">UTG</button>
+        <button onclick="setRangeMode(1, this)">HJ</button>
+        <button onclick="setRangeMode(2, this)">CO</button>
+        <button onclick="setRangeMode(3, this)">BTN</button>
+      </div>
+      <div class="range-grid" id="range-grid"></div>
+      <div class="legend" id="range-legend"></div>
+      <div class="range-caption" id="range-caption"></div>
+    </div>
+    <div class="tip" style="border-radius:10px">
+      📖 <b>읽는 법</b>: 대각선 = 페어, 오른쪽 위 = 수딧(s, 같은 무늬), 왼쪽 아래 = 오프수트(o).
+      빠른 포지션 색일수록 <b>강한 핸드</b> — UTG 색이면 어느 자리에서든 오픈 OK.
+    </div>
+    <div class="tip" style="border-radius:10px">
+      💡 <b>SB(스몰블라인드)</b>는 CO 정도 레인지로 <b>레이즈 or 폴드</b> (림프 금지).
+      <b>BB(빅블라인드)</b>는 이미 낸 돈이 있으니 상대 레이즈에 넓게 콜로 방어 가능.
+    </div>
+  </section>
+
+  <!-- ══════════ 분석 탭 ══════════ -->
+  <section id="tab-analysis" class="tab">
+    <div id="analysis-content"></div>
+  </section>
+
+  <!-- ══════════ 가이드 탭 ══════════ -->
+  <section id="tab-guide" class="tab">
+
+    <div class="acc open">
+      <div class="acc-head" onclick="toggleAcc(this)">🪑 포지션과 액션 순서 <span class="arrow">▸</span></div>
+      <div class="acc-body">
+        <svg class="table-svg" viewBox="0 0 340 210" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="170" cy="105" rx="130" ry="70" fill="#1f4a33" stroke="#2c4435" stroke-width="3"/>
+          <ellipse cx="170" cy="105" rx="100" ry="48" fill="none" stroke="#2c5a3f" stroke-width="1.5"/>
+          <g font-family="inherit" font-size="13" font-weight="700" text-anchor="middle">
+            <g><circle cx="170" cy="22" r="17" fill="#18261e" stroke="#f87171" stroke-width="2"/><text x="170" y="26" fill="#f87171" font-size="11">UTG</text></g>
+            <g><circle cx="290" cy="60" r="17" fill="#18261e" stroke="#fb923c" stroke-width="2"/><text x="290" y="64" fill="#fb923c" font-size="11">HJ</text></g>
+            <g><circle cx="290" cy="150" r="17" fill="#18261e" stroke="#fbbf24" stroke-width="2"/><text x="290" y="154" fill="#fbbf24" font-size="11">CO</text></g>
+            <g><circle cx="170" cy="188" r="17" fill="#18261e" stroke="#34d399" stroke-width="2.5"/><text x="170" y="192" fill="#34d399" font-size="10">BTN</text></g>
+            <g><circle cx="50" cy="150" r="17" fill="#18261e" stroke="#93a89b" stroke-width="2"/><text x="50" y="154" fill="#93a89b" font-size="11">SB</text></g>
+            <g><circle cx="50" cy="60" r="17" fill="#18261e" stroke="#93a89b" stroke-width="2"/><text x="50" y="64" fill="#93a89b" font-size="11">BB</text></g>
+          </g>
+          <text x="170" y="100" fill="#7fbf9f" font-size="11" text-anchor="middle">시계 방향으로 액션 ↻</text>
+          <text x="170" y="118" fill="#5a8a70" font-size="10" text-anchor="middle">BTN(버튼) = 최고의 자리</text>
+        </svg>
+        <p><span class="hl">프리플랍</span>: UTG → HJ → CO → BTN → SB → BB 순서로 액션.</p>
+        <p style="margin-top:6px"><span class="hl">플랍 이후</span>: SB → BB → … → BTN 순서. <strong style="color:var(--gold)">버튼이 항상 마지막에 액션</strong> = 상대를 다 보고 결정할 수 있어 가장 유리.</p>
+        <div class="tip">💡 핵심 원칙: <b>뒤 포지션일수록 더 많은 핸드를 플레이해도 된다.</b> 정보 우위가 있기 때문.</div>
+      </div>
+    </div>
+
+    <div class="acc">
+      <div class="acc-head" onclick="toggleAcc(this)">💰 배팅 사이즈 기본기 <span class="arrow">▸</span></div>
+      <div class="acc-body">
+        <ul>
+          <li><b>프리플랍 오픈</b>: 2.2~3bb (라이브는 3~4bb)</li>
+          <li><b>림퍼가 있으면</b>: 3bb + 림퍼당 1bb 추가</li>
+          <li><b>3벳(재레이즈)</b>: 인포지션 → 오픈의 3배 / 아웃오브포지션 → 4배</li>
+          <li><b>플랍 c-bet</b>: 팟의 33~75%<br>
+            <span style="color:var(--muted);font-size:13px">드라이 보드(K♦7♣2♠) → 작게 33% / 웻 보드(9♠8♠7♦) → 크게 66~75%</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="acc">
+      <div class="acc-head" onclick="toggleAcc(this)">📖 액션 용어 <span class="arrow">▸</span></div>
+      <div class="acc-body">
+        <ul>
+          <li><b>체크</b> — 배팅 없이 넘김 (앞에 배팅 없을 때만)</li>
+          <li><b>벳</b> — 첫 배팅</li>
+          <li><b>콜</b> — 상대 배팅만큼 따라감</li>
+          <li><b>레이즈</b> — 상대 배팅보다 올림 (최소 직전 증가폭 이상)</li>
+          <li><b>폴드</b> — 포기</li>
+          <li><b>올인</b> — 스택 전부</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="acc">
+      <div class="acc-head" onclick="toggleAcc(this)">⚠️ 초보 흔한 실수 3가지 <span class="arrow">▸</span></div>
+      <div class="acc-body">
+        <ul>
+          <li><span class="warn">너무 많은 핸드 플레이</span> — 처음엔 답답할 정도로 타이트하게. UTG에서 K9o는 폴드.</li>
+          <li><span class="warn">림프 습관</span> — 들어갈 거면 레이즈, 아니면 폴드. "레이즈 or 폴드"만 기억.</li>
+          <li><span class="warn">포지션 무시</span> — 핸드만 보지 말고 내 자리부터 확인.</li>
+        </ul>
+      </div>
+    </div>
+
+  </section>
+</div>
+
+<nav>
+  <button id="nav-journal" class="active" onclick="switchTab('journal')"><span class="ico">📒</span>일지</button>
+  <button id="nav-write" onclick="resetForm(); switchTab('write')"><span class="ico">✍️</span>작성</button>
+  <button id="nav-range" onclick="switchTab('range')"><span class="ico">🃏</span>레인지</button>
+  <button id="nav-analysis" onclick="renderAnalysis(); switchTab('analysis')"><span class="ico">📊</span>분석</button>
+  <button id="nav-guide" onclick="switchTab('guide')"><span class="ico">🎓</span>가이드</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const KEY = 'holdem_journal_v1';
+let entries = [];
+try { entries = JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { entries = []; }
+
+function persist() { localStorage.setItem(KEY, JSON.stringify(entries)); }
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function toggleAcc(head) { head.parentElement.classList.toggle('open'); }
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+function fmt(n) { return new Intl.NumberFormat('ko-KR').format(Math.round(n)); }
+function profitClass(p) { return p > 0 ? 'profit-pos' : p < 0 ? 'profit-neg' : 'profit-zero'; }
+function profitText(p) { return (p > 0 ? '+' : '') + fmt(p); }
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function newId() {
+  let id = Date.now();
+  while (entries.some(e => e.id === id)) id++;
+  return id;
+}
+
+// ═══════════ 프리플랍 레인지 차트 ═══════════
+const RANKS = ['A','K','Q','J','T','9','8','7','6','5','4','3','2'];
+const ri = c => RANKS.indexOf(c);
+
+// '66+' → 66~AA, 'ATs+' → ATs~AKs, 'T8s+' → T8s,T9s
+function expandSpec(spec) {
+  const out = [];
+  const plus = spec.endsWith('+');
+  const core = plus ? spec.slice(0, -1) : spec;
+  if (core[0] === core[1]) {
+    if (plus) { for (let k = ri(core[0]); k >= 0; k--) out.push(RANKS[k] + RANKS[k]); }
+    else out.push(core);
+  } else {
+    const a = core[0], suf = core[2];
+    if (plus) { for (let k = ri(core[1]); k > ri(a); k--) out.push(a + RANKS[k] + suf); }
+    else out.push(core);
+  }
+  return out;
+}
+
+// 각 포지션에서 "새로 추가"되는 핸드 (앞 포지션 레인지를 포함하는 누적 구조)
+const TIER_DEFS = [
+  { name: 'UTG', cls: 't0', color: 'var(--red)',
+    specs: ['55+','A9s+','A5s','KTs+','QTs+','JTs','T9s','ATo+','KJo+'] },
+  { name: 'HJ', cls: 't1', color: 'var(--orange)',
+    specs: ['33+','A4s+','K9s+','Q9s+','J9s+','98s','87s','QJo'] },
+  { name: 'CO', cls: 't2', color: 'var(--gold)',
+    specs: ['22+','A2s+','K7s+','T8s+','97s+','76s','65s','A8o+','KTo+','QTo+','JTo'] },
+  { name: 'BTN', cls: 't3', color: 'var(--green)',
+    specs: ['K2s+','Q4s+','J6s+','T6s+','96s+','86s+','75s+','64s+','54s','A2o+','K8o+','Q9o+','J8o+','T8o+','98o','87o'] },
+];
+
+const TIER_SETS = [];
+{
+  let acc = new Set();
+  TIER_DEFS.forEach(t => {
+    acc = new Set(acc);
+    t.specs.forEach(s => expandSpec(s).forEach(h => acc.add(h)));
+    TIER_SETS.push(acc);
+  });
+}
+
+function handName(r, c) {
+  if (r === c) return RANKS[r] + RANKS[c];
+  return r < c ? RANKS[r] + RANKS[c] + 's' : RANKS[c] + RANKS[r] + 'o';
+}
+function combosOf(h) { return h.length === 2 ? 6 : h[2] === 's' ? 4 : 12; }
+function pctOfSet(set) {
+  let n = 0; set.forEach(h => n += combosOf(h));
+  return Math.round(n / 1326 * 100);
+}
+function tierOf(hand) {
+  for (let i = 0; i < TIER_SETS.length; i++) if (TIER_SETS[i].has(hand)) return i;
+  return -1;
+}
+
+let rangeMode = 'all';
+function buildRangeGrid() {
+  const grid = document.getElementById('range-grid');
+  let html = '';
+  for (let r = 0; r < 13; r++) {
+    for (let c = 0; c < 13; c++) {
+      const h = handName(r, c);
+      let cls = 'rc';
+      if (rangeMode === 'all') {
+        const tier = tierOf(h);
+        if (tier >= 0) cls += ' ' + TIER_DEFS[tier].cls;
+      } else {
+        cls += TIER_SETS[rangeMode].has(h) ? ' on' : ' dim';
+      }
+      html += `<div class="${cls}">${h}</div>`;
+    }
+  }
+  grid.innerHTML = html;
+
+  const legend = document.getElementById('range-legend');
+  const caption = document.getElementById('range-caption');
+  if (rangeMode === 'all') {
+    legend.innerHTML = TIER_DEFS.map((t, i) =>
+      `<span><i style="background:${t.color}"></i>${t.name}부터 (~${pctOfSet(TIER_SETS[i])}%)</span>`
+    ).join('') + '<span><i style="background:#131f18;border:1px solid var(--border)"></i>폴드</span>';
+    caption.innerHTML = '색 = <b>이 핸드를 오픈(첫 레이즈)할 수 있는 가장 빠른 포지션</b>. 빨강(UTG)은 어디서든 오픈, 초록(BTN)은 버튼에서만.';
+  } else {
+    const t = TIER_DEFS[rangeMode];
+    legend.innerHTML = `<span><i style="background:var(--accent)"></i>${t.name}에서 오픈</span><span><i style="background:#131f18;border:1px solid var(--border)"></i>폴드</span>`;
+    caption.innerHTML = `<b>${t.name} 오픈 레인지</b> — 전체 핸드의 약 <b>${pctOfSet(TIER_SETS[rangeMode])}%</b>. 색칠된 핸드만 레이즈, 나머지는 폴드.`;
+  }
+}
+function setRangeMode(mode, btn) {
+  rangeMode = mode;
+  document.querySelectorAll('#pos-btns button').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  buildRangeGrid();
+}
+
+// ═══════════ 일지 목록 + 통계 + 그래프 ═══════════
+function render() {
+  renderStats();
+  renderChart();
+  renderList();
+}
+
+function renderStats() {
+  const total = entries.reduce((s, e) => s + e.profit, 0);
+  const wins = entries.filter(e => e.profit > 0).length;
+  const totalHours = entries.reduce((s, e) => s + (Number(e.hours) || 0), 0);
+
+  document.getElementById('stat-sessions').textContent = entries.length;
+  const sp = document.getElementById('stat-profit');
+  sp.textContent = profitText(total);
+  sp.className = 'value ' + profitClass(total);
+  document.getElementById('stat-winrate').textContent =
+    entries.length ? Math.round(wins / entries.length * 100) + '%' : '-';
+  const avgEl = document.getElementById('stat-avg');
+  if (entries.length) {
+    const avg = total / entries.length;
+    avgEl.textContent = profitText(avg);
+    avgEl.className = 'value ' + profitClass(avg);
+  } else { avgEl.textContent = '-'; avgEl.className = 'value'; }
+  const hrEl = document.getElementById('stat-hourly');
+  if (totalHours > 0) {
+    const hourly = total / totalHours;
+    hrEl.textContent = profitText(hourly);
+    hrEl.className = 'value ' + profitClass(hourly);
+  } else { hrEl.textContent = '-'; hrEl.className = 'value'; }
+  document.getElementById('stat-hours').textContent = totalHours > 0 ? totalHours + 'h' : '-';
+}
+
+function renderChart() {
+  const card = document.getElementById('chart-card');
+  if (entries.length < 2) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+  let cum = 0;
+  const pts = [{ v: 0 }].concat(sorted.map(e => { cum += e.profit; return { v: cum }; }));
+
+  const W = 320, H = 130, padL = 8, padR = 8, padT = 12, padB = 16;
+  const min = Math.min(0, ...pts.map(p => p.v));
+  const max = Math.max(0, ...pts.map(p => p.v));
+  const span = (max - min) || 1;
+  const xs = i => padL + i / (pts.length - 1) * (W - padL - padR);
+  const ys = v => padT + (max - v) / span * (H - padT - padB);
+
+  const line = pts.map((p, i) => (i ? 'L' : 'M') + xs(i).toFixed(1) + ',' + ys(p.v).toFixed(1)).join(' ');
+  const final = pts[pts.length - 1].v;
+  const color = final >= 0 ? 'var(--green)' : 'var(--red)';
+  const zeroY = ys(0).toFixed(1);
+  const dots = pts.map((p, i) =>
+    `<circle cx="${xs(i).toFixed(1)}" cy="${ys(p.v).toFixed(1)}" r="2.5" fill="${p.v >= 0 ? 'var(--green)' : 'var(--red)'}"/>`).join('');
+
+  document.getElementById('chart').innerHTML =
+    `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+      <line x1="${padL}" y1="${zeroY}" x2="${W - padR}" y2="${zeroY}" stroke="var(--border)" stroke-dasharray="4 4"/>
+      <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
+      ${dots}
+      <text x="${W - padR}" y="${Math.max(12, Math.min(H - 6, ys(final) - 8))}" fill="${color}" font-size="11" font-weight="700" text-anchor="end">${profitText(final)}</text>
+    </svg>`;
+}
+
+function renderList() {
+  const list = document.getElementById('entry-list');
+  const sorted = [...entries].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+
+  if (!sorted.length) {
+    list.innerHTML = '<div class="empty"><div class="big">🂡</div>아직 기록이 없어요.<br>아래 <b>✍️ 작성</b> 탭에서 첫 세션을 기록해보세요!</div>';
+    return;
+  }
+
+  list.innerHTML = sorted.map(e => {
+    const timeTxt = e.hours ? e.hours + '시간' : (e.duration || '');
+    return `
+    <div class="entry" onclick="this.classList.toggle('open')">
+      <div class="entry-head">
+        <div>
+          <div class="entry-date">${e.date} ${timeTxt ? '· ' + esc(timeTxt) : ''}
+            ${e.tilt !== '없음' ? `<span class="badge ${e.tilt === '심함' ? 'bad' : ''}">틸트 ${e.tilt}</span>` : ''}
+          </div>
+          <div class="entry-game">${esc(e.game) || '(게임 미기재)'}</div>
+        </div>
+        <div class="entry-profit ${profitClass(e.profit)}">${profitText(e.profit)}</div>
+      </div>
+      <div class="entry-body" onclick="event.stopPropagation()">
+        <p class="entry-meta">바이인 ${fmt(e.buyin)} → 캐시아웃 ${fmt(e.cashout)}</p>
+        ${e.goal ? `<h4>🎯 목표</h4><p>${esc(e.goal)}</p>` : ''}
+        ${e.hands ? `<h4>🃏 기억에 남는 핸드</h4><p>${esc(e.hands)}</p>` : ''}
+        ${e.lesson ? `<h4>📌 교훈</h4><p>${esc(e.lesson)}</p>` : ''}
+        <div class="entry-actions">
+          <button onclick="editEntry(${e.id})">✏️ 수정</button>
+          <button class="del" onclick="deleteEntry(${e.id})">🗑 삭제</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════ 폼 ═══════════
+function resetForm() {
+  document.getElementById('f-id').value = '';
+  document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+  ['f-hours','f-game','f-buyin','f-cashout','f-goal','f-hands','f-lesson'].forEach(id =>
+    document.getElementById(id).value = '');
+  document.getElementById('f-tilt').value = '없음';
+  document.getElementById('btn-cancel').style.display = 'none';
+  updateProfitPreview();
+}
+
+function updateProfitPreview() {
+  const b = Number(document.getElementById('f-buyin').value) || 0;
+  const c = Number(document.getElementById('f-cashout').value) || 0;
+  const p = c - b;
+  const el = document.getElementById('profit-preview');
+  el.textContent = (b || c) ? '수익: ' + profitText(p) : '';
+  el.className = 'profit-preview ' + profitClass(p);
+}
+document.getElementById('f-buyin').addEventListener('input', updateProfitPreview);
+document.getElementById('f-cashout').addEventListener('input', updateProfitPreview);
+
+function saveEntry() {
+  const date = document.getElementById('f-date').value;
+  if (!date) { toast('날짜를 입력해주세요'); return; }
+  const buyin = Number(document.getElementById('f-buyin').value) || 0;
+  const cashout = Number(document.getElementById('f-cashout').value) || 0;
+  const idVal = document.getElementById('f-id').value;
+  const hoursRaw = document.getElementById('f-hours').value;
+
+  const data = {
+    id: idVal ? Number(idVal) : newId(),
+    date,
+    hours: hoursRaw === '' ? null : Number(hoursRaw),
+    game: document.getElementById('f-game').value.trim(),
+    buyin, cashout, profit: cashout - buyin,
+    goal: document.getElementById('f-goal').value.trim(),
+    hands: document.getElementById('f-hands').value.trim(),
+    lesson: document.getElementById('f-lesson').value.trim(),
+    tilt: document.getElementById('f-tilt').value,
+  };
+
+  if (idVal) {
+    entries = entries.map(e => e.id === data.id ? data : e);
+    toast('수정 완료!');
+  } else {
+    entries.push(data);
+    toast('저장 완료! 🎉');
+  }
+  persist();
+  render();
+  resetForm();
+  switchTab('journal');
+}
+
+function editEntry(id) {
+  const e = entries.find(x => x.id === id);
+  if (!e) return;
+  document.getElementById('f-id').value = e.id;
+  document.getElementById('f-date').value = e.date;
+  document.getElementById('f-hours').value = e.hours != null ? e.hours : '';
+  document.getElementById('f-game').value = e.game || '';
+  document.getElementById('f-buyin').value = e.buyin || '';
+  document.getElementById('f-cashout').value = e.cashout || '';
+  document.getElementById('f-goal').value = e.goal || '';
+  document.getElementById('f-hands').value = e.hands || '';
+  document.getElementById('f-lesson').value = e.lesson || '';
+  document.getElementById('f-tilt').value = e.tilt || '없음';
+  document.getElementById('btn-cancel').style.display = 'block';
+  updateProfitPreview();
+  switchTab('write');
+}
+
+function deleteEntry(id) {
+  if (!confirm('이 기록을 삭제할까요?')) return;
+  entries = entries.filter(e => e.id !== id);
+  persist();
+  render();
+  toast('삭제됨');
+}
+
+// ═══════════ 분석 ═══════════
+function renderAnalysis() {
+  const el = document.getElementById('analysis-content');
+
+  if (!entries.length) {
+    el.innerHTML = '<div class="empty"><div class="big">📊</div>기록이 쌓이면 분석이 여기 표시돼요.</div>';
+    return;
+  }
+
+  let html = '';
+
+  // ── 틸트 vs 수익 ──
+  const byTilt = { '없음': [], '약간': [], '심함': [] };
+  entries.forEach(e => { (byTilt[e.tilt] || byTilt['없음']).push(e.profit); });
+  const tiltRows = Object.entries(byTilt).filter(([, v]) => v.length).map(([k, v]) => {
+    const avg = v.reduce((a, b) => a + b, 0) / v.length;
+    return `<tr><td>${k === '없음' ? '😌 없음' : k === '약간' ? '😐 약간' : '🔥 심함'}</td><td>${v.length}</td><td><span class="${profitClass(avg)}">${profitText(avg)}</span></td></tr>`;
+  }).join('');
+  html += `<div class="ana-card"><h3>🧠 틸트와 수익</h3>
+    <table><tr><th>틸트</th><th>세션</th><th>평균 수익</th></tr>${tiltRows}</table>
+    <p class="ana-note">틸트 세션의 평균이 확실히 나쁘다면 → 흔들린 날은 일찍 일어나는 게 이득이라는 증거.</p></div>`;
+
+  // ── 월별 수익 ──
+  const byMonth = {};
+  entries.forEach(e => {
+    const m = e.date.slice(0, 7);
+    if (!byMonth[m]) byMonth[m] = { n: 0, sum: 0, hours: 0 };
+    byMonth[m].n++; byMonth[m].sum += e.profit; byMonth[m].hours += Number(e.hours) || 0;
+  });
+  const monthRows = Object.keys(byMonth).sort().reverse().map(m => {
+    const s = byMonth[m];
+    return `<tr><td>${m}</td><td>${s.n}</td><td>${s.hours ? s.hours + 'h' : '-'}</td><td><span class="${profitClass(s.sum)}">${profitText(s.sum)}</span></td></tr>`;
+  }).join('');
+  html += `<div class="ana-card"><h3>📅 월별 수익</h3>
+    <table><tr><th>월</th><th>세션</th><th>시간</th><th>수익</th></tr>${monthRows}</table></div>`;
+
+  el.innerHTML = html;
+}
+
+// ═══════════ 백업 ═══════════
+function exportData() {
+  const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'holdem-journal-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('백업 파일 저장됨');
+}
+
+function importData(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = JSON.parse(reader.result);
+      if (!Array.isArray(imported)) throw new Error();
+      const ids = new Set(entries.map(e => e.id));
+      let added = 0;
+      imported.forEach(e => { if (e && e.id && !ids.has(e.id)) { entries.push(e); added++; } });
+      persist();
+      render();
+      toast(added + '개 기록 불러옴');
+    } catch { toast('파일 형식이 올바르지 않아요'); }
+  };
+  reader.readAsText(file);
+  ev.target.value = '';
+}
+
+resetForm();
+buildRangeGrid();
+render();
+</script>
+</body>
+</html>
