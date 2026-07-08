@@ -229,6 +229,22 @@
   .calc-verdict.close { border-color: var(--gold); }
   .calc-verdict.close .big { color: var(--gold); }
 
+  /* 아웃츠 퀴즈 */
+  .quiz-label { font-size: 12px; color: var(--muted); font-weight: 700; margin-bottom: 6px; }
+  .card-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .pcard {
+    width: 50px; height: 70px; background: #f7f5ef; border-radius: 8px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-weight: 800; box-shadow: 0 2px 6px rgba(0,0,0,0.35); line-height: 1.1;
+  }
+  .pcard .r { font-size: 19px; }
+  .pcard .s { font-size: 17px; }
+  .pcard.red { color: #c93030; }
+  .pcard.black { color: #1c1c1c; }
+  .quiz-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .quiz-score { font-size: 12px; font-weight: 700; color: var(--muted); }
+  .quiz-scenario { font-size: 13px; color: var(--gold); font-weight: 700; margin-bottom: 12px; }
+
   /* 분석 탭 */
   .ana-card {
     background: var(--card); border: 1px solid var(--border); border-radius: 14px;
@@ -403,6 +419,35 @@
 
   <!-- ══════════ 계산기 탭 ══════════ -->
   <section id="tab-calc" class="tab">
+    <div class="street-btns" style="margin-bottom:10px">
+      <button type="button" class="sel" id="cm-odds" onclick="setCalcMode('odds')">🧮 팟 오즈</button>
+      <button type="button" id="cm-quiz" onclick="setCalcMode('quiz')">🎯 아웃츠 연습</button>
+    </div>
+
+    <div id="panel-quiz" style="display:none">
+      <div class="form-card" style="margin-bottom:10px">
+        <div class="quiz-topbar">
+          <div class="range-title" style="margin-bottom:0">🎯 아웃츠 세기</div>
+          <div class="quiz-score" id="quiz-score"></div>
+        </div>
+        <div class="quiz-scenario">상대를 이기려면 아래 드로우를 맞춰야 해. 아웃츠는 몇 개?</div>
+        <div class="quiz-label">내 핸드</div>
+        <div class="card-row" id="quiz-hand"></div>
+        <div class="quiz-label">플랍</div>
+        <div class="card-row" id="quiz-board"></div>
+        <div class="field"><label>내 아웃츠는?</label>
+          <input type="number" id="quiz-answer" inputmode="numeric" placeholder="숫자 입력" min="0" max="21">
+        </div>
+        <button class="btn-primary" id="quiz-check" onclick="checkQuiz()">정답 확인</button>
+        <div id="quiz-result" style="margin-top:12px"></div>
+        <button class="btn-cancel" id="quiz-next" style="display:none" onclick="newQuiz()">다음 문제 →</button>
+      </div>
+      <div class="tip" style="border-radius:10px">
+        💡 세는 법: <b>내 핸드를 완성시키는 카드 종류 × 남은 장수</b>. 두 드로우가 겹치면 겹치는 카드는 한 번만!
+      </div>
+    </div>
+
+    <div id="panel-odds">
     <div class="form-card" style="margin-bottom:10px">
       <div class="range-title">🧮 팟 오즈 계산기</div>
       <div class="row2">
@@ -433,6 +478,7 @@
     <div class="tip" style="border-radius:10px">
       ⚠️ 계산기는 <b>수학적 손익만</b> 봐. 이겼을 때 상대에게 더 받아낼 수 있으면(임플라이드 오즈) 애매한 콜도 이득이 될 수 있어.
     </div>
+    </div><!-- /panel-odds -->
   </section>
 
   <!-- ══════════ 분석 탭 ══════════ -->
@@ -900,6 +946,136 @@ function calcOdds() {
 }
 ['c-pot','c-bet','c-outs'].forEach(id =>
   document.getElementById(id).addEventListener('input', calcOdds));
+
+function setCalcMode(mode) {
+  document.getElementById('panel-odds').style.display = mode === 'odds' ? 'block' : 'none';
+  document.getElementById('panel-quiz').style.display = mode === 'quiz' ? 'block' : 'none';
+  document.getElementById('cm-odds').classList.toggle('sel', mode === 'odds');
+  document.getElementById('cm-quiz').classList.toggle('sel', mode === 'quiz');
+  if (mode === 'quiz' && !quizCur) newQuiz();
+}
+
+// ═══════════ 아웃츠 퀴즈 ═══════════
+// 변형(variants)의 카드는 [랭크, 무늬번호] — 무늬번호는 문제마다 랜덤 무늬로 치환
+const QUIZ_TEMPLATES = [
+  { name: '플러시 드로우', outs: 9,
+    explain: '같은 무늬 13장 중 4장(내 2장 + 보드 2장)이 보임 → 남은 건 9장.',
+    variants: [
+      { h: [['9',0],['6',0]], b: [['A',0],['7',0],['2',1]] },
+      { h: [['T',0],['6',0]], b: [['K',0],['8',0],['3',2]] },
+      { h: [['J',0],['7',0]], b: [['A',0],['9',0],['2',3]] },
+    ] },
+  { name: '오픈엔드 스트레이트 드로우 (양차)', outs: 8,
+    explain: '스트레이트 양쪽 끝 두 종류의 카드 × 4장 = 8장. (예: 9-8-7-6이면 T나 5)',
+    variants: [
+      { h: [['9',0],['8',1]], b: [['7',2],['6',3],['2',0]] },
+      { h: [['T',0],['9',1]], b: [['8',2],['7',3],['2',1]] },
+      { h: [['J',0],['T',1]], b: [['9',2],['8',3],['3',0]] },
+    ] },
+  { name: '거트샷 (한 칸 빈 스트레이트)', outs: 4,
+    explain: '스트레이트 가운데 빈 칸을 채우는 카드 한 종류 × 4장 = 4장.',
+    variants: [
+      { h: [['J',0],['T',1]], b: [['8',2],['7',3],['2',0]] },
+      { h: [['Q',0],['J',1]], b: [['9',2],['8',3],['3',1]] },
+      { h: [['9',0],['8',1]], b: [['6',2],['5',3],['K',0]] },
+    ] },
+  { name: '플러시 드로우 + 양차', outs: 15,
+    explain: '플러시 9장 + 스트레이트 8장 - 겹치는 2장(스트레이트 완성 카드 중 같은 무늬) = 15장.',
+    variants: [
+      { h: [['J',0],['T',0]], b: [['9',0],['8',0],['2',1]] },
+      { h: [['T',0],['9',0]], b: [['8',0],['7',0],['3',2]] },
+    ] },
+  { name: '플러시 드로우 + 거트샷', outs: 12,
+    explain: '플러시 9장 + 거트샷 4장 - 겹치는 1장 = 12장.',
+    variants: [
+      { h: [['Q',0],['J',0]], b: [['9',0],['8',0],['3',1]] },
+      { h: [['J',0],['T',0]], b: [['8',0],['7',0],['2',2]] },
+    ] },
+  { name: '오버카드 2장', outs: 6,
+    explain: '내 카드 두 종류 중 아무거나 페어가 되면 이김 → 3장 + 3장 = 6장. (페어가 되면 이긴다고 가정)',
+    variants: [
+      { h: [['A',0],['K',1]], b: [['Q',2],['7',3],['2',1]] },
+      { h: [['A',0],['Q',1]], b: [['J',2],['6',3],['2',0]] },
+      { h: [['K',0],['Q',1]], b: [['8',2],['4',3],['2',1]] },
+    ] },
+  { name: '거트샷 + 오버카드 2장', outs: 10,
+    explain: '거트샷 4장 + 오버카드 페어 6장 = 10장.',
+    variants: [
+      { h: [['A',0],['K',1]], b: [['Q',2],['J',3],['5',0]] },
+      { h: [['A',0],['K',1]], b: [['J',2],['T',3],['4',1]] },
+    ] },
+  { name: '포켓페어 → 세트', outs: 2,
+    explain: '보드에 오버카드가 깔려서 세트를 떠야 이기는 상황. 같은 랭크가 2장만 남음 = 2장.',
+    variants: [
+      { h: [['9',0],['9',1]], b: [['K',2],['Q',3],['4',0]] },
+      { h: [['8',0],['8',1]], b: [['A',2],['K',3],['3',1]] },
+      { h: [['7',0],['7',1]], b: [['Q',2],['J',3],['2',0]] },
+    ] },
+];
+
+const SUITS = ['♠','♥','♦','♣'];
+let quizCur = null;
+let quizScore = { ok: 0, total: 0 };
+
+function shuffleArr(a) {
+  const r = [...a];
+  for (let i = r.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [r[i], r[j]] = [r[j], r[i]];
+  }
+  return r;
+}
+
+function cardHtml(c) {
+  const red = c[1] === '♥' || c[1] === '♦';
+  return `<div class="pcard ${red ? 'red' : 'black'}"><span class="r">${c[0]}</span><span class="s">${c[1]}</span></div>`;
+}
+
+function newQuiz() {
+  let t = QUIZ_TEMPLATES[Math.floor(Math.random() * QUIZ_TEMPLATES.length)];
+  if (quizCur && t.name === quizCur.t.name && QUIZ_TEMPLATES.length > 1) {
+    t = QUIZ_TEMPLATES[(QUIZ_TEMPLATES.indexOf(t) + 1) % QUIZ_TEMPLATES.length];
+  }
+  const v = t.variants[Math.floor(Math.random() * t.variants.length)];
+  const suits = shuffleArr(SUITS);
+  quizCur = {
+    t,
+    hand: v.h.map(c => [c[0], suits[c[1]]]),
+    board: shuffleArr(v.b).map(c => [c[0], suits[c[1]]]),
+  };
+  document.getElementById('quiz-hand').innerHTML = quizCur.hand.map(cardHtml).join('');
+  document.getElementById('quiz-board').innerHTML = quizCur.board.map(cardHtml).join('');
+  document.getElementById('quiz-answer').value = '';
+  document.getElementById('quiz-result').innerHTML = '';
+  document.getElementById('quiz-check').style.display = 'block';
+  document.getElementById('quiz-next').style.display = 'none';
+  updateQuizScore();
+}
+
+function updateQuizScore() {
+  document.getElementById('quiz-score').textContent =
+    quizScore.total ? `맞춘 문제 ${quizScore.ok} / ${quizScore.total}` : '';
+}
+
+function checkQuiz() {
+  const raw = document.getElementById('quiz-answer').value;
+  if (raw === '') { toast('아웃츠 개수를 입력해줘!'); return; }
+  const val = Number(raw);
+  const t = quizCur.t;
+  const correct = val === t.outs;
+  quizScore.total++;
+  if (correct) quizScore.ok++;
+  updateQuizScore();
+
+  document.getElementById('quiz-result').innerHTML = `
+    <div class="calc-verdict ${correct ? 'go' : 'no'}">
+      <div class="big">${correct ? '🎉 정답!' : `아쉽! 정답은 ${t.outs}개`}</div>
+      <div class="nums">${t.name}</div>
+      <div class="why">${t.explain}<br>승률: 플랍에서 약 <b>${Math.min(99, t.outs * 4)}%</b>, 턴에서 약 <b>${t.outs * 2}%</b> (2와 4의 법칙)</div>
+    </div>`;
+  document.getElementById('quiz-check').style.display = 'none';
+  document.getElementById('quiz-next').style.display = 'block';
+}
 
 // ═══════════ 폼 ═══════════
 function resetForm() {
