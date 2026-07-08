@@ -421,7 +421,40 @@
   <section id="tab-calc" class="tab">
     <div class="street-btns" style="margin-bottom:10px">
       <button type="button" class="sel" id="cm-odds" onclick="setCalcMode('odds')">🧮 팟 오즈</button>
-      <button type="button" id="cm-quiz" onclick="setCalcMode('quiz')">🎯 아웃츠 연습</button>
+      <button type="button" id="cm-bet" onclick="setCalcMode('bet')">💰 벳 사이즈</button>
+      <button type="button" id="cm-quiz" onclick="setCalcMode('quiz')">🎯 연습</button>
+    </div>
+
+    <div id="panel-bet" style="display:none">
+      <div class="form-card" style="margin-bottom:10px">
+        <div class="range-title">🛡️ 드로우 차단 벳 <span style="font-size:12px;color:var(--muted);font-weight:400">— 내가 앞서 있을 때</span></div>
+        <div class="field"><label>현재 팟</label><input type="number" id="b-pot" inputmode="numeric" placeholder="예: 60000"></div>
+        <div class="field"><label>상대가 노릴 만한 드로우</label>
+          <div class="out-btns" id="bet-out-btns">
+            <button type="button" data-outs="4" onclick="setBetOuts(4,this)">거트샷<br><b>4</b></button>
+            <button type="button" data-outs="8" onclick="setBetOuts(8,this)">양차<br><b>8</b></button>
+            <button type="button" data-outs="9" class="sel" onclick="setBetOuts(9,this)">플러시<br><b>9</b></button>
+            <button type="button" data-outs="15" onclick="setBetOuts(15,this)">콤보<br><b>15</b></button>
+          </div>
+        </div>
+        <div id="bet-protect-result"></div>
+      </div>
+      <div class="form-card" style="margin-bottom:10px">
+        <div class="range-title">🎭 블러프 손익 <span style="font-size:12px;color:var(--muted);font-weight:400">— 상대를 접게 하고 싶을 때</span></div>
+        <div class="field"><label>내 벳 금액</label>
+          <input type="number" id="b-bluff" inputmode="numeric" placeholder="직접 입력 or 아래 버튼">
+          <div class="out-btns">
+            <button type="button" onclick="setBluff(1/3)">⅓ 팟</button>
+            <button type="button" onclick="setBluff(1/2)">½ 팟</button>
+            <button type="button" onclick="setBluff(2/3)">⅔ 팟</button>
+            <button type="button" onclick="setBluff(1)">팟</button>
+          </div>
+        </div>
+        <div id="bet-bluff-result"></div>
+      </div>
+      <div class="tip" style="border-radius:10px">
+        💡 초보 흔한 실수가 <b>너무 작은 벳</b>이야. 작은 벳은 모든 드로우에게 "싸게 봐" 하고 초대장 주는 것. 이길 때 벳은 팟의 <b>½~⅔</b>이 기본.
+      </div>
     </div>
 
     <div id="panel-quiz" style="display:none">
@@ -977,12 +1010,87 @@ function calcOdds() {
   document.getElementById(id).addEventListener('input', calcOdds));
 
 function setCalcMode(mode) {
-  document.getElementById('panel-odds').style.display = mode === 'odds' ? 'block' : 'none';
-  document.getElementById('panel-quiz').style.display = mode === 'quiz' ? 'block' : 'none';
-  document.getElementById('cm-odds').classList.toggle('sel', mode === 'odds');
-  document.getElementById('cm-quiz').classList.toggle('sel', mode === 'quiz');
+  ['odds','bet','quiz'].forEach(m => {
+    document.getElementById('panel-' + m).style.display = m === mode ? 'block' : 'none';
+    document.getElementById('cm-' + m).classList.toggle('sel', m === mode);
+  });
   if (mode === 'quiz' && !quizCur) newQuiz();
+  if (mode === 'bet') calcBet();
 }
+
+// ═══════════ 벳 사이즈 계산기 ═══════════
+let betOuts = 9;
+function setBetOuts(n, btn) {
+  betOuts = n;
+  document.querySelectorAll('#bet-out-btns button').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  calcBet();
+}
+function setBluff(frac) {
+  const pot = Number(document.getElementById('b-pot').value) || 0;
+  if (!pot) { toast('먼저 팟 크기를 입력해줘!'); return; }
+  document.getElementById('b-bluff').value = Math.round(pot * frac);
+  calcBet();
+}
+function calcBet() {
+  const pot = Number(document.getElementById('b-pot').value) || 0;
+  const protEl = document.getElementById('bet-protect-result');
+  const bluffEl = document.getElementById('bet-bluff-result');
+
+  if (!pot) {
+    protEl.innerHTML = '<p style="font-size:13px;color:var(--muted);text-align:center;padding:8px 0">팟 크기를 입력하면 결과가 나와요</p>';
+    bluffEl.innerHTML = '';
+    return;
+  }
+
+  // ── 드로우 차단: 상대의 한 장 승률(플랍 기준 outs/47)보다 필요 승률이 높아지는 최소 벳
+  // 필요 승률 = B/(pot+2B) > e  →  B > e·pot/(1-2e)
+  const e = betOuts / 47;
+  const minBet = e * pot / (1 - 2 * e);
+  const minPct = Math.round(minBet / pot * 100);
+
+  const sizes = [
+    ['⅓ 팟', pot / 3], ['½ 팟', pot / 2], ['⅔ 팟', pot * 2 / 3], ['팟', pot]
+  ];
+  const tdL = 'padding:7px 4px;border-top:1px solid var(--border)';
+  const tdR = tdL + ';text-align:right';
+  const rows = sizes.map(([label, B]) => {
+    const req = B / (pot + 2 * B);
+    const ok = req > e;
+    return `<tr><td style="${tdL}">${label} (${fmt(B)})</td><td style="${tdR}">${(req * 100).toFixed(0)}%</td>
+      <td style="${tdR};font-weight:800;color:${ok ? 'var(--green)' : 'var(--red)'}">${ok ? '차단 ✓' : '콜 이득 ✗'}</td></tr>`;
+  }).join('');
+
+  protEl.innerHTML = `
+    <div class="calc-verdict go" style="margin-bottom:10px">
+      <div class="big">최소 ${fmt(minBet)} 이상</div>
+      <div class="nums">팟의 약 <b style="color:var(--text)">${minPct}%</b></div>
+      <div class="why">이보다 크게 벳하면 상대 드로우(${betOuts}아웃, 다음 카드 승률 ~${(e * 100).toFixed(0)}%)는 콜할수록 손해.</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr><th style="text-align:left;color:var(--muted);font-size:11px;padding:6px 4px">벳 사이즈</th>
+          <th style="text-align:right;color:var(--muted);font-size:11px;padding:6px 4px">상대 필요 승률</th>
+          <th style="text-align:right;color:var(--muted);font-size:11px;padding:6px 4px">판정</th></tr>
+      ${rows}
+    </table>
+    ${betOuts >= 12 ? '<p style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5">⚠️ 콤보 드로우는 승률이 너무 높아서 사실상 못 쫓아내. 그래도 벳해야 하는 이유: 공짜 카드를 주는 것보단 비싸게 받는 게 낫기 때문.</p>' : ''}`;
+
+  // ── 블러프 손익분기
+  const bluff = Number(document.getElementById('b-bluff').value) || 0;
+  if (bluff > 0) {
+    const be = bluff / (bluff + pot);
+    bluffEl.innerHTML = `
+      <div class="calc-verdict close">
+        <div class="big">폴드율 ${(be * 100).toFixed(0)}% 필요</div>
+        <div class="nums">${fmt(bluff)} 벳 → 팟 ${fmt(pot)}</div>
+        <div class="why">상대가 <b>${(be * 100).toFixed(0)}%보다 자주</b> 폴드하면 이 블러프는 장기적으로 이득. 벳이 클수록 접게 만들긴 쉽지만 실패하면 잃는 것도 커.</div>
+      </div>`;
+  } else {
+    bluffEl.innerHTML = '<p style="font-size:13px;color:var(--muted);text-align:center;padding:8px 0">벳 금액을 입력하면 손익분기 폴드율이 나와요</p>';
+  }
+}
+['b-pot','b-bluff'].forEach(id =>
+  document.getElementById(id).addEventListener('input', calcBet));
 
 // ═══════════ 아웃츠 퀴즈 ═══════════
 // 변형(variants)의 카드는 [랭크, 무늬번호] — 무늬번호는 문제마다 랜덤 무늬로 치환
