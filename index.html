@@ -107,6 +107,52 @@
     white-space: nowrap;
   }
   .badge.bad { color: var(--red); border-color: var(--red); }
+  .badge.hands { color: var(--gold); border-color: var(--gold); }
+
+  /* 핸드 표시 (일지 카드 안) */
+  .hand-view {
+    background: var(--card2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 8px;
+  }
+  .hand-view-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
+  .pos-chip {
+    font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 6px;
+    background: var(--bg); border: 1px solid var(--accent); color: var(--accent);
+  }
+  .hand-cards { font-weight: 800; font-size: 15px; }
+  .result-win { color: var(--green); font-weight: 700; font-size: 12px; }
+  .result-lose { color: var(--red); font-weight: 700; font-size: 12px; }
+  .result-chop { color: var(--gold); font-weight: 700; font-size: 12px; }
+  .result-fold { color: var(--muted); font-weight: 700; font-size: 12px; }
+  .hand-view p { font-size: 13px; line-height: 1.6; margin-top: 6px; white-space: pre-wrap; }
+  .hand-amount { margin-left: auto; font-weight: 800; font-size: 14px; }
+
+  /* 핸드 입력 블록 */
+  .hand-block {
+    background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px; margin-bottom: 10px;
+  }
+  .hand-block .field input, .hand-block .field textarea, .hand-block .field select { background: var(--card2); }
+  .hand-block-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .hand-block-head .num { font-size: 12px; font-weight: 800; color: var(--gold); }
+  .hand-block-head button {
+    background: none; border: none; color: var(--red); font-size: 12px; font-weight: 700;
+    cursor: pointer; font-family: inherit; padding: 4px;
+  }
+  .row3 { display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 8px; }
+  .suit-row { display: flex; gap: 6px; margin-top: -6px; margin-bottom: 12px; }
+  .suit-row button {
+    flex: 1; padding: 7px 0; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card2); font-size: 16px; cursor: pointer;
+  }
+  .suit-red { color: #f87171; }
+  .suit-black { color: #e8f0ea; }
+  .btn-add-hand {
+    width: 100%; padding: 12px; border-radius: 12px;
+    border: 1px dashed var(--accent); background: none; color: var(--accent);
+    font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+    margin-bottom: 14px;
+  }
 
   .empty { text-align: center; color: var(--muted); padding: 40px 20px; font-size: 14px; line-height: 1.7; }
   .empty .big { font-size: 40px; margin-bottom: 8px; }
@@ -262,7 +308,11 @@
       </div>
       <div class="profit-preview" id="profit-preview"></div>
       <div class="field"><label>오늘의 목표 (시작 전 작성)</label><input type="text" id="f-goal" placeholder="예: UTG에서 타이트하게"></div>
-      <div class="field"><label>기억에 남는 핸드 / 메모</label><textarea id="f-hands" placeholder="포지션 / 홀카드 / 액션 / 결과 / 다시 한다면?"></textarea></div>
+      <div class="field"><label style="margin-bottom:10px">🃏 핸드 기록 (선택 — 기억에 남는 것만)</label>
+        <div id="hand-list"></div>
+        <button type="button" class="btn-add-hand" onclick="addHandBlock()">＋ 핸드 추가</button>
+      </div>
+      <div class="field"><label>메모</label><textarea id="f-hands" placeholder="테이블 분위기, 상대 노트 등"></textarea></div>
       <div class="field"><label>오늘의 교훈</label><textarea id="f-lesson" placeholder="한 줄이라도 남기기"></textarea></div>
       <div class="field"><label>틸트 체크</label>
         <select id="f-tilt">
@@ -418,6 +468,71 @@ function newId() {
   let id = Date.now();
   while (entries.some(e => e.id === id)) id++;
   return id;
+}
+const POSITIONS = ['UTG', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
+const RESULT_LABEL = { win: '승리', lose: '패배', chop: '찹', fold: '폴드' };
+function handsOf(e) { return Array.isArray(e.handList) ? e.handList : []; }
+
+// ═══════════ 핸드 입력 블록 ═══════════
+function addHandBlock(data) {
+  const d = data || {};
+  const wrap = document.createElement('div');
+  wrap.className = 'hand-block';
+  wrap.innerHTML = `
+    <div class="hand-block-head">
+      <span class="num">HAND</span>
+      <button type="button" onclick="this.closest('.hand-block').remove(); renumberHands()">✕ 삭제</button>
+    </div>
+    <div class="row3">
+      <div class="field"><label>포지션</label>
+        <select class="h-pos">${POSITIONS.map(p => `<option ${d.pos === p ? 'selected' : ''}>${p}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>홀카드</label>
+        <input type="text" class="h-cards" placeholder="A♠K♠" value="${esc(d.cards)}">
+      </div>
+      <div class="field"><label>결과</label>
+        <select class="h-result">
+          <option value="win" ${d.result === 'win' ? 'selected' : ''}>승리</option>
+          <option value="lose" ${d.result === 'lose' ? 'selected' : ''}>패배</option>
+          <option value="chop" ${d.result === 'chop' ? 'selected' : ''}>찹</option>
+          <option value="fold" ${d.result === 'fold' ? 'selected' : ''}>폴드</option>
+        </select>
+      </div>
+    </div>
+    <div class="suit-row">
+      <button type="button" class="suit-black" onclick="insertSuit(this,'♠')">♠</button>
+      <button type="button" class="suit-red" onclick="insertSuit(this,'♥')">♥</button>
+      <button type="button" class="suit-red" onclick="insertSuit(this,'♦')">♦</button>
+      <button type="button" class="suit-black" onclick="insertSuit(this,'♣')">♣</button>
+    </div>
+    <div class="field"><label>이 핸드 수익 (선택, 잃었으면 마이너스)</label>
+      <input type="number" class="h-amount" placeholder="예: 45000 / -30000" inputmode="numeric" value="${d.amount != null ? d.amount : ''}">
+    </div>
+    <div class="field" style="margin-bottom:0"><label>한 줄 복기 (선택)</label>
+      <input type="text" class="h-note" placeholder="예: 3벳 받고 접었어야 했다" value="${esc(d.note)}">
+    </div>`;
+  document.getElementById('hand-list').appendChild(wrap);
+  renumberHands();
+}
+
+function renumberHands() {
+  document.querySelectorAll('#hand-list .hand-block .num').forEach((el, i) => el.textContent = 'HAND ' + (i + 1));
+}
+
+function insertSuit(btn, suit) {
+  const input = btn.closest('.hand-block').querySelector('.h-cards');
+  input.value += suit;
+  input.focus();
+}
+
+function readHandBlocks() {
+  return [...document.querySelectorAll('#hand-list .hand-block')].map(b => ({
+    pos: b.querySelector('.h-pos').value,
+    cards: b.querySelector('.h-cards').value.trim(),
+    result: b.querySelector('.h-result').value,
+    amount: b.querySelector('.h-amount').value === '' ? null : Number(b.querySelector('.h-amount').value),
+    note: b.querySelector('.h-note').value.trim(),
+  })).filter(h => h.cards || h.note || h.amount != null);
 }
 
 // ═══════════ 프리플랍 레인지 차트 ═══════════
@@ -591,11 +706,23 @@ function renderList() {
 
   list.innerHTML = sorted.map(e => {
     const timeTxt = e.hours ? e.hours + '시간' : (e.duration || '');
+    const hands = handsOf(e);
+    const handHtml = hands.map(h => `
+      <div class="hand-view">
+        <div class="hand-view-head">
+          <span class="pos-chip">${esc(h.pos)}</span>
+          <span class="hand-cards">${esc(h.cards) || '?'}</span>
+          <span class="result-${esc(h.result)}">${RESULT_LABEL[h.result] || ''}</span>
+          ${h.amount != null ? `<span class="hand-amount ${profitClass(Number(h.amount))}">${profitText(Number(h.amount))}</span>` : ''}
+        </div>
+        ${h.note ? `<p>${esc(h.note)}</p>` : ''}
+      </div>`).join('');
     return `
     <div class="entry" onclick="this.classList.toggle('open')">
       <div class="entry-head">
         <div>
           <div class="entry-date">${e.date} ${timeTxt ? '· ' + esc(timeTxt) : ''}
+            ${hands.length ? `<span class="badge hands">🃏 ${hands.length}핸드</span>` : ''}
             ${e.tilt !== '없음' ? `<span class="badge ${e.tilt === '심함' ? 'bad' : ''}">틸트 ${e.tilt}</span>` : ''}
           </div>
           <div class="entry-game">${esc(e.game) || '(게임 미기재)'}</div>
@@ -605,7 +732,8 @@ function renderList() {
       <div class="entry-body" onclick="event.stopPropagation()">
         <p class="entry-meta">바이인 ${fmt(e.buyin)} → 캐시아웃 ${fmt(e.cashout)}</p>
         ${e.goal ? `<h4>🎯 목표</h4><p>${esc(e.goal)}</p>` : ''}
-        ${e.hands ? `<h4>🃏 기억에 남는 핸드</h4><p>${esc(e.hands)}</p>` : ''}
+        ${handHtml ? `<h4>🃏 핸드 기록</h4>${handHtml}` : ''}
+        ${e.hands ? `<h4>📝 메모</h4><p>${esc(e.hands)}</p>` : ''}
         ${e.lesson ? `<h4>📌 교훈</h4><p>${esc(e.lesson)}</p>` : ''}
         <div class="entry-actions">
           <button onclick="editEntry(${e.id})">✏️ 수정</button>
@@ -623,6 +751,7 @@ function resetForm() {
   ['f-hours','f-game','f-buyin','f-cashout','f-goal','f-hands','f-lesson'].forEach(id =>
     document.getElementById(id).value = '');
   document.getElementById('f-tilt').value = '없음';
+  document.getElementById('hand-list').innerHTML = '';
   document.getElementById('btn-cancel').style.display = 'none';
   updateProfitPreview();
 }
@@ -653,6 +782,7 @@ function saveEntry() {
     game: document.getElementById('f-game').value.trim(),
     buyin, cashout, profit: cashout - buyin,
     goal: document.getElementById('f-goal').value.trim(),
+    handList: readHandBlocks(),
     hands: document.getElementById('f-hands').value.trim(),
     lesson: document.getElementById('f-lesson').value.trim(),
     tilt: document.getElementById('f-tilt').value,
@@ -684,6 +814,8 @@ function editEntry(id) {
   document.getElementById('f-hands').value = e.hands || '';
   document.getElementById('f-lesson').value = e.lesson || '';
   document.getElementById('f-tilt').value = e.tilt || '없음';
+  document.getElementById('hand-list').innerHTML = '';
+  handsOf(e).forEach(h => addHandBlock(h));
   document.getElementById('btn-cancel').style.display = 'block';
   updateProfitPreview();
   switchTab('write');
@@ -707,6 +839,33 @@ function renderAnalysis() {
   }
 
   let html = '';
+
+  // ── 포지션별 성적 ──
+  const allHands = entries.flatMap(e => handsOf(e));
+  if (allHands.length) {
+    const byPos = {};
+    POSITIONS.forEach(p => byPos[p] = { n: 0, win: 0, lose: 0, amt: 0, hasAmt: false });
+    allHands.forEach(h => {
+      const s = byPos[h.pos]; if (!s) return;
+      s.n++;
+      if (h.result === 'win') s.win++;
+      if (h.result === 'lose') s.lose++;
+      if (h.amount != null) { s.amt += Number(h.amount); s.hasAmt = true; }
+    });
+    const posRows = POSITIONS.filter(p => byPos[p].n).map(p => {
+      const s = byPos[p];
+      const showdown = s.win + s.lose;
+      const wr = showdown ? Math.round(s.win / showdown * 100) + '%' : '-';
+      const amt = s.hasAmt ? `<span class="${profitClass(s.amt)}">${profitText(s.amt)}</span>` : '-';
+      return `<tr><td><span class="pos-chip">${p}</span></td><td>${s.n}</td><td>${wr}</td><td>${amt}</td></tr>`;
+    }).join('');
+    html += `<div class="ana-card"><h3>🪑 포지션별 성적</h3>
+      <table><tr><th>포지션</th><th>핸드</th><th>승률</th><th>수익</th></tr>${posRows}</table>
+      <p class="ana-note">승률은 승리/패배 핸드만 계산 (폴드 제외). 특정 포지션에서 유독 잃는다면 레인지 탭에서 그 자리 레인지를 점검!</p></div>`;
+  } else {
+    html += `<div class="ana-card"><h3>🪑 포지션별 성적</h3>
+      <p class="ana-note">작성 탭에서 "＋ 핸드 추가"로 핸드를 기록하면 포지션별 승률·수익이 여기 집계돼요.</p></div>`;
+  }
 
   // ── 틸트 vs 수익 ──
   const byTilt = { '없음': [], '약간': [], '심함': [] };
